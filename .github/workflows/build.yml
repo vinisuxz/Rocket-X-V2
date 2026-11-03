@@ -4,7 +4,6 @@ name: Build Rocket-X V2
   push:
     branches:
       - main
-
   workflow_dispatch:
 
 permissions:
@@ -24,20 +23,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential \
-            bison \
-            flex \
-            texinfo \
-            libgmp-dev \
-            libmpfr-dev \
-            libmpc-dev \
-            curl \
-            xz-utils \
-            patch \
-            python3 \
-            cmake \
-            ninja-build \
-            git
+            build-essential bison flex texinfo \
+            libgmp-dev libmpfr-dev libmpc-dev \
+            curl xz-utils patch python3 cmake \
+            ninja-build git
 
       - name: Download XSDK
         uses: actions/checkout@v4
@@ -56,25 +45,20 @@ jobs:
 
       - name: Build XSDK
         env:
-          TOOLCHAIN: ${{ github.workspace }}/xsdk-gcc
+          TOOLCHAIN: ${{ github.workspace }}/xsdk-gcc/bin/powerpc-xsdk-elf-
         run: |
-          echo "$TOOLCHAIN/bin" >> "$GITHUB_PATH"
+          echo "${{ github.workspace }}/xsdk-gcc/bin" >> "$GITHUB_PATH"
           make -C xsdk -j2 TOOLCHAIN="$TOOLCHAIN"
 
       - name: Compile Rocket-X
         if: ${{ hashFiles('CMakeLists.txt') != '' }}
-        env:
-          XSDK_DIR: ${{ github.workspace }}/xsdk
-          XSDK_TOOLCHAIN: ${{ github.workspace }}/xsdk-gcc
         run: |
           cmake -S . -B build -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE="$XSDK_DIR/cmake/xsdk.cmake" \
-            -DXSDK_TOOLCHAIN="$XSDK_TOOLCHAIN" \
+            -DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/xsdk/cmake/xsdk.cmake" \
+            -DXSDK_TOOLCHAIN="$GITHUB_WORKSPACE/xsdk-gcc" \
             -DCMAKE_BUILD_TYPE=Release
 
           cmake --build build --verbose
-
-          test -f build/Rocket-X.xex
 
       - name: Upload Rocket-X
         if: ${{ hashFiles('build/Rocket-X.xex') != '' }}
