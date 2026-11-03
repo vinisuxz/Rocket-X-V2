@@ -1,1 +1,90 @@
+name: Build Rocket-X V2
 
+'on':
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Xbox 360
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout Rocket-X
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            bison \
+            flex \
+            texinfo \
+            libgmp-dev \
+            libmpfr-dev \
+            libmpc-dev \
+            curl \
+            xz-utils \
+            patch \
+            python3 \
+            cmake \
+            ninja-build \
+            git
+
+      - name: Download XSDK
+        uses: actions/checkout@v4
+        with:
+          repository: xenosworks/xsdk
+          path: xsdk
+
+      - name: Build XSDK toolchain
+        env:
+          PREFIX: ${{ github.workspace }}/xsdk-gcc
+          WORK: ${{ runner.temp }}/xsdk-gcc-work
+          JOBS: "2"
+        run: |
+          cd xsdk
+          bash tools/toolchain/build.sh
+
+      - name: Build XSDK
+        env:
+          TOOLCHAIN: ${{ github.workspace }}/xsdk-gcc
+        run: |
+          echo "$TOOLCHAIN/bin" >> "$GITHUB_PATH"
+          make -C xsdk -j2 TOOLCHAIN="$TOOLCHAIN"
+
+      - name: Compile Rocket-X
+        if: ${{ hashFiles('CMakeLists.txt') != '' }}
+        env:
+          XSDK_DIR: ${{ github.workspace }}/xsdk
+          XSDK_TOOLCHAIN: ${{ github.workspace }}/xsdk-gcc
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$XSDK_DIR/cmake/xsdk.cmake" \
+            -DXSDK_TOOLCHAIN="$XSDK_TOOLCHAIN" \
+            -DCMAKE_BUILD_TYPE=Release
+
+          cmake --build build --verbose
+
+          test -f build/Rocket-X.xex
+
+      - name: Upload Rocket-X
+        if: ${{ hashFiles('build/Rocket-X.xex') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rocket-X-V2
+          path: build/Rocket-X.xex
+
+      - name: Upload XSDK test
+        uses: actions/upload-artifact@v4
+        with:
+          name: XSDK-Test
+          path: xsdk/build/xsdk_test.xex
