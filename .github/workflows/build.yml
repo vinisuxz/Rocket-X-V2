@@ -52,6 +52,36 @@ jobs:
           cd xsdk
           bash tools/toolchain/build.sh
 
+          
+      - name: Download glslang-xenon
+        uses: actions/checkout@v4
+        with:
+          repository: xenosworks/glslang-xenon
+          ref: xenon
+          path: glslang-xenon
+
+      - name: Build glslang
+        run: |
+          cd glslang-xenon
+
+          python3 update_glslang_sources.py
+
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_OPT=ON \
+            -DSPIRV_SKIP_EXECUTABLES=ON \
+            -DGLSLANG_TESTS=OFF
+
+          cmake --build build -j2
+
+          mkdir -p "$GITHUB_WORKSPACE/xsdk-gcc/bin"
+
+          cp build/StandAlone/glslang \
+            "$GITHUB_WORKSPACE/xsdk-gcc/bin/glslang"
+
+          "$GITHUB_WORKSPACE/xsdk-gcc/bin/glslang" --version
+          
+
       - name: Build XSDK
         env:
           TOOLCHAIN: ${{ github.workspace }}/xsdk-gcc/bin/powerpc-xsdk-elf-
