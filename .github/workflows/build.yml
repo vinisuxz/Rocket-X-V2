@@ -19,6 +19,15 @@ jobs:
       - name: Checkout Rocket-X
         uses: actions/checkout@v4
 
+      - name: Reassemble arena model
+        run: |
+          cat \
+            assets/models/arena.glb.partaa \
+            assets/models/arena.glb.partab \
+            > assets/models/arena.glb
+
+          ls -lh assets/models/arena.glb
+
       - name: Install dependencies
         run: |
           sudo apt-get update
