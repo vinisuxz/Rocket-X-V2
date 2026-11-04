@@ -103,6 +103,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Rocket-X-V2
-          path: build/RocketX.xex
+          path: build/Rocket-X.xex
           if-no-files-found: error
           
