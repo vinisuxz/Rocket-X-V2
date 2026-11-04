@@ -100,14 +100,9 @@ jobs:
           cmake --build build --verbose
 
       - name: Upload Rocket-X
-        if: ${{ hashFiles('build/Rocket-X.xex') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: Rocket-X-V2
-          path: build/Rocket-X.xex
-
-      - name: Upload XSDK test
-        uses: actions/upload-artifact@v4
-        with:
-          name: XSDK-Test
-          path: xsdk/build/xsdk_test.xex
+          path: build/RocketX.xex
+          if-no-files-found: error
+          
