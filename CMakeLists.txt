@@ -19,9 +19,4 @@ target_compile_options(RocketX PRIVATE
     -Werror
 )
 
-xsdk_add_shaders(RocketX
-    src/rocket.vert
-    src/rocket.frag
-)
-
 xsdk_add_xex(RocketX)
