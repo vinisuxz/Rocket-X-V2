@@ -1,108 +1,93 @@
-name: Build Rocket-X V2
 
-'on':
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+#include <stdint.h>
+#include <stdbool.h>
 
-permissions:
-  contents: read
+#include "xsdk/gpu.h"
+#include "xsdk/kernel.h"
+#include "xsdk/log.h"
+#include "xsdk/present.h"
 
-jobs:
-  build:
-    name: Build Xbox 360
-    runs-on: ubuntu-24.04
-    timeout-minutes: 360
+#define BUFFERS 2
+#define SWAP_INTERVAL 1
+#define CLEAR_COLOR 0xFF87CEEB
+#define BEGIN_TIMEOUT_MS 5000
 
-    steps:
-      - name: Checkout Rocket-X
-        uses: actions/checkout@v4
+int main(void)
+{
+    xsdk_log_write("ROCKET-X: START");
 
-      - name: Reassemble arena model
-        run: |
-          cat \
-            assets/models/arena.glb.partaa \
-            assets/models/arena.glb.partab \
-            > assets/models/arena.glb
+    NTSTATUS status = xsdk_gpu_open();
 
-          ls -lh assets/models/arena.glb
+    if (!NT_SUCCESS(status)) {
+        xsdk_log_write("ROCKET-X: GPU OPEN FAILED: 0x%08X",
+                       (unsigned)status);
+        return 1;
+    }
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential bison flex texinfo \
-            libgmp-dev libmpfr-dev libmpc-dev \
-            curl xz-utils patch python3 cmake \
-            ninja-build git
+    uint32_t width = 0;
+    uint32_t height = 0;
 
-      - name: Download XSDK
-        uses: actions/checkout@v4
-        with:
-          repository: xenosworks/xsdk
-          path: xsdk
+    status = xsdk_present_open(
+        XSDK_DISPLAY_720P,
+        BUFFERS,
+        SWAP_INTERVAL,
+        &width,
+        &height
+    );
 
-      - name: Build XSDK toolchain
-        env:
-          PREFIX: ${{ github.workspace }}/xsdk-gcc
-          WORK: ${{ runner.temp }}/xsdk-gcc-work
-          JOBS: "2"
-        run: |
-          cd xsdk
-          bash tools/toolchain/build.sh
+    if (!NT_SUCCESS(status)) {
+        xsdk_log_write("ROCKET-X: PRESENT OPEN FAILED: 0x%08X",
+                       (unsigned)status);
+        xsdk_gpu_close();
+        return 1;
+    }
 
-          
-      - name: Download glslang-xenon
-        uses: actions/checkout@v4
-        with:
-          repository: xenosworks/glslang-xenon
-          ref: xenon
-          path: glslang-xenon
+    xsdk_log_write("ROCKET-X: DISPLAY %ux%u",
+                   (unsigned)width,
+                   (unsigned)height);
 
-      - name: Build glslang
-        run: |
-          cd glslang-xenon
+    bool running = true;
 
-          python3 update_glslang_sources.py
+    while (running) {
+        INPUT_STATE input = {0};
 
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DENABLE_OPT=ON \
-            -DSPIRV_SKIP_EXECUTABLES=ON \
-            -DGLSLANG_TESTS=OFF
+        if (XamInputGetState(0, 0, &input) == ERROR_SUCCESS) {
+            if (input.gamepad.buttons & INPUT_GAMEPAD_BACK) {
+                running = false;
+            }
+        }
 
-          cmake --build build -j2
+        if (!running)
+            break;
 
-          mkdir -p "$GITHUB_WORKSPACE/xsdk-gcc/bin"
+        uint32_t address = 0;
 
-          cp build/StandAlone/glslang \
-            "$GITHUB_WORKSPACE/xsdk-gcc/bin/glslang"
+        status = xsdk_present_begin(
+            &address,
+            BEGIN_TIMEOUT_MS
+        );
 
-          "$GITHUB_WORKSPACE/xsdk-gcc/bin/glslang" --version
-          
+        if (!NT_SUCCESS(status)) {
+            xsdk_log_write("ROCKET-X: PRESENT BEGIN FAILED");
+            break;
+        }
 
-      - name: Build XSDK
-        env:
-          TOOLCHAIN: ${{ github.workspace }}/xsdk-gcc/bin/powerpc-xsdk-elf-
-        run: |
-          echo "${{ github.workspace }}/xsdk-gcc/bin" >> "$GITHUB_PATH"
-          make -C xsdk -j2 TOOLCHAIN="$TOOLCHAIN"
+        xsdk_gpu_set_target(width, height);
 
-      - name: Compile Rocket-X
-        if: ${{ hashFiles('CMakeLists.txt') != '' }}
-        run: |
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/xsdk/cmake/xsdk.cmake" \
-            -DXSDK_TOOLCHAIN="$GITHUB_WORKSPACE/xsdk-gcc" \
-            -DCMAKE_BUILD_TYPE=Release
+        xsdk_gpu_resolve(
+            address,
+            width,
+            height,
+            CLEAR_COLOR
+        );
 
-          cmake --build build --verbose
+        xsdk_present_end();
+    }
 
-      - name: Upload Rocket-X
-        uses: actions/upload-artifact@v4
-        with:
-          name: Rocket-X-V2
-          path: build/RocketX.xex
-          if-no-files-found: error
-          
+    xsdk_present_close();
+    xsdk_gpu_close();
+
+    xsdk_log_write("ROCKET-X: EXIT");
+
+    return 0;
+}
