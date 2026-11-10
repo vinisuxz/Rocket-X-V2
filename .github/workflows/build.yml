@@ -1,0 +1,133 @@
+name: Build Rocket-X V2
+
+'on':
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Xbox 360
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout Rocket-X
+        uses: actions/checkout@v4
+
+      - name: Reassemble arena model
+        run: |
+          cat \
+            assets/models/arena.glb.partaa \
+            assets/models/arena.glb.partab \
+            > assets/models/arena.glb
+
+          ls -lh assets/models/arena.glb
+
+      - name: Convert models to .rxm
+        run: |
+          pip install --break-system-packages numpy pillow || pip install numpy pillow
+          M=assets/models
+          python3 tools/convert_glb.py $M/arena.glb $M/arena.rxm \
+            --scale 22 --origin 0,0.033822,0 --glass --pitch \
+            --recolor play_lambert1=0.10,0.42,0.24 \
+            --recolor play_ring02=0.14,0.18,0.28 \
+            --recolor nuke_bottomframe=0.20,0.23,0.30 \
+            --recolor fut_secondary=0.20,0.24,0.40 \
+            --recolor Side=0.52,0.54,0.60 \
+            --recolor rl_curve2=0.42,0.44,0.50 \
+            --recolor shield_octaneBody=0.26,0.31,0.43 \
+            --recolor split=0.55,0.14,0.12 \
+            --recolor entry_GlowHolder=0.15,0.55,0.60 \
+            --recolor shield_main=0.30,0.34,0.30 \
+            --recolor rl_curve2_glow=0.20,0.45,0.95
+          python3 tools/convert_glb.py $M/ball_-_rocket_league.glb $M/ball.rxm \
+            --scale 0.95 --origin 0.031,0,-0.032 --recolor Mat.3=0.88,0.90,0.95
+          python3 tools/convert_glb.py $M/octane_-_rocket_league_car.glb $M/car.rxm \
+            --wheels --scale 0.0107 --directional 0.25
+          ls -lh $M/*.rxm
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential bison flex texinfo \
+            libgmp-dev libmpfr-dev libmpc-dev \
+            curl xz-utils patch python3 cmake \
+            ninja-build git
+
+      - name: Download XSDK
+        uses: actions/checkout@v4
+        with:
+          repository: xenosworks/xsdk
+          path: xsdk
+
+      - name: Build XSDK toolchain
+        env:
+          PREFIX: ${{ github.workspace }}/xsdk-gcc
+          WORK: ${{ runner.temp }}/xsdk-gcc-work
+          JOBS: "2"
+        run: |
+          cd xsdk
+          bash tools/toolchain/build.sh
+
+          
+      - name: Download glslang-xenon
+        uses: actions/checkout@v4
+        with:
+          repository: xenosworks/glslang-xenon
+          ref: xenon
+          path: glslang-xenon
+
+      - name: Build glslang
+        run: |
+          cd glslang-xenon
+
+          python3 update_glslang_sources.py
+
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_OPT=ON \
+            -DSPIRV_SKIP_EXECUTABLES=ON \
+            -DGLSLANG_TESTS=OFF
+
+          cmake --build build -j2
+
+          mkdir -p "$GITHUB_WORKSPACE/xsdk-gcc/bin"
+
+          cp build/StandAlone/glslang \
+            "$GITHUB_WORKSPACE/xsdk-gcc/bin/glslang"
+
+          "$GITHUB_WORKSPACE/xsdk-gcc/bin/glslang" --version
+          
+
+      - name: Build XSDK
+        env:
+          TOOLCHAIN: ${{ github.workspace }}/xsdk-gcc/bin/powerpc-xsdk-elf-
+        run: |
+          echo "${{ github.workspace }}/xsdk-gcc/bin" >> "$GITHUB_PATH"
+          make -C xsdk -j2 TOOLCHAIN="$TOOLCHAIN"
+
+      - name: Compile Rocket-X
+        if: ${{ hashFiles('CMakeLists.txt') != '' }}
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/xsdk/cmake/xsdk.cmake" \
+            -DXSDK_TOOLCHAIN="$GITHUB_WORKSPACE/xsdk-gcc" \
+            -DCMAKE_BUILD_TYPE=Release
+
+          cmake --build build --verbose
+
+      - name: Upload Rocket-X
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rocket-X-V2
+          path: |
+            build/RocketX.xex
+            assets/models/*.rxm
+          if-no-files-found: error
+          
