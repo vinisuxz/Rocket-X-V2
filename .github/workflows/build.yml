@@ -33,8 +33,8 @@ jobs:
           pip install --break-system-packages numpy pillow || pip install numpy pillow
           M=assets/models
           python3 tools/convert_glb.py $M/arena.glb $M/arena.rxm \
-            --scale 22 --origin 0,0.033822,0 --glass --pitch \
-            --recolor play_lambert1=0.10,0.42,0.24 \
+            --scale 22 --origin 0,0.033822,0 --glass --pitch --gamma 2.2 \
+            --recolor play_lambert1=0.08,0.33,0.17 \
             --recolor play_ring02=0.14,0.18,0.28 \
             --recolor nuke_bottomframe=0.20,0.23,0.30 \
             --recolor fut_secondary=0.20,0.24,0.40 \
@@ -46,9 +46,9 @@ jobs:
             --recolor shield_main=0.30,0.34,0.30 \
             --recolor rl_curve2_glow=0.20,0.45,0.95
           python3 tools/convert_glb.py $M/ball_-_rocket_league.glb $M/ball.rxm \
-            --scale 0.95 --origin 0.031,0,-0.032 --recolor Mat.3=0.88,0.90,0.95
+            --scale 0.95 --origin 0.031,0,-0.032 --gamma 2.2 --recolor Mat.3=0.88,0.90,0.95
           python3 tools/convert_glb.py $M/octane_-_rocket_league_car.glb $M/car.rxm \
-            --wheels --scale 0.0107 --directional 0.25
+            --wheels --scale 0.0107 --directional 0.25 --gamma 2.2
           ls -lh $M/*.rxm
 
       - name: Install dependencies
@@ -130,4 +130,5 @@ jobs:
             build/RocketX.xex
             assets/models/*.rxm
           if-no-files-found: error
+
           
