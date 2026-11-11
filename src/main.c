@@ -182,6 +182,7 @@ int main(void)
                    "X powerslide/air roll left, RB air roll right, right stick orbit camera, Start/Y reset, Back exit");
 
     double last = seconds_now();
+    uint32_t frame = 0;
     for (;;) {
         INPUT_STATE input = {0};
         if (XamInputGetState(0, 0, &input) == ERROR_SUCCESS && (input.gamepad.buttons & INPUT_GAMEPAD_BACK)) break;
@@ -189,7 +190,12 @@ int main(void)
         double now = seconds_now();
         Controls controls = read_controls(&input);
         game_update(&game, &controls, (float)(now - last));
+        if (frame < 3 || frame % 120 == 0)
+            xsdk_log_write("Rocket-X: frame %u dt %d us car %d %d %d (cm) speed %d (cm/s) throttle %d", (unsigned)frame,
+                           (int)((now - last) * 1e6), (int)(game.car.pos.x * 100), (int)(game.car.pos.y * 100),
+                           (int)(game.car.pos.z * 100), (int)(length(game.car.vel) * 100), (int)(controls.throttle * 100));
         last = now;
+        frame++;
 
         uint32_t address = 0;
         status = xsdk_present_begin(&address, BEGIN_TIMEOUT_MS);
