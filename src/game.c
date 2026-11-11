@@ -39,9 +39,10 @@ static const float CAMERA_FOLLOW = 4.0f;
 
 static float wrap_pi(float a)
 {
-    while (a > PI_F) a -= 2.0f * PI_F;
-    while (a < -PI_F) a += 2.0f * PI_F;
-    return a;
+    if (!(a - a == 0.0f)) return 0.0f;          // NaN ou infinito
+    a = fmodf(a + PI_F, 2.0f * PI_F);
+    if (a < 0.0f) a += 2.0f * PI_F;
+    return a - PI_F;
 }
 
 // ---- a arena ---------------------------------------------------------------------------------------------------
@@ -416,6 +417,13 @@ void game_update(Game *game, const Controls *controls, float dt)
         ball_step(game, h);
     }
     camera_update(game, controls, dt);
+
+    // Rede de seguranca: se algo virar NaN ou sair do mundo, recomeca em vez de travar.
+    float probe = game->car.pos.x + game->car.pos.y + game->car.pos.z + game->car.vel.x + game->car.vel.y +
+                  game->car.vel.z + game->ball.pos.x + game->ball.pos.y + game->ball.pos.z + game->ball.vel.x +
+                  game->ball.vel.y + game->ball.vel.z + game->camera.eye.x + game->camera.eye.y + game->camera.eye.z +
+                  game->car.fwd.x + game->car.fwd.y + game->car.fwd.z;
+    if (!(probe - probe == 0.0f) || fabsf(probe) > 20000.0f) game_init(game);
 }
 
 Mat4 game_view(const Game *game)
