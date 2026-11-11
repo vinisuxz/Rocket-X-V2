@@ -335,6 +335,8 @@ def main():
                         help="separa as rodas 'Dieci - XX' nas partes 1 a 4 (FL, FR, BL, BR), poe a frente do carro em +Z "
                              "e a origem no chao, entre as rodas")
     parser.add_argument("--pitch", action="store_true", help="desenha faixas e linhas brancas no gramado (so para a arena, em metros antes da escala)")
+    parser.add_argument("--gamma", type=float, default=1.0,
+                        help="eleva as cores a esta potencia (2.2 desfaz a codificacao sRGB que o video do console aplica)")
     parser.add_argument("--little", action="store_true", help="little-endian, so para testes no PC")
     parser.add_argument("--info", action="store_true", help="so mostra as dimensoes, sem escrever arquivo")
     args = parser.parse_args()
@@ -388,7 +390,10 @@ def main():
     if args.pitch:
         # as medidas das linhas estao em metros do jogo; aqui as posicoes ainda estao nas unidades do modelo
         pieces += [(part, positions / args.scale, colors, tri) for part, positions, colors, tri in
-                   pitch_decals(1.0, np.array([0.09, 0.36, 0.20]), np.array([0.11, 0.41, 0.23]), np.array([0.93, 0.95, 0.97]))]
+                   pitch_decals(1.0, np.array([0.08, 0.33, 0.17]), np.array([0.13, 0.46, 0.25]), np.array([0.93, 0.95, 0.97]))]
+
+    if args.gamma != 1.0:
+        pieces = [(part, positions, np.clip(colors, 0.0, 1.0) ** args.gamma, tri) for part, positions, colors, tri in pieces]
 
     print(f"{args.input}: {len(pieces)} primitivas, {dropped} transparentes descartadas")
     print(f"  tamanho {np.round((high - low) * args.scale, 3)}  origem em {np.round(origin, 3)}")
